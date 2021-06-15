@@ -1,20 +1,12 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import classnames from 'classnames';
-import * as appPropTypes from './appPropTypes';
 
 export default class PeerView extends React.Component
 {
 	constructor(props)
 	{
 		super(props);
-
-		this.state =
-		{
-			videoCanPlay    : false,
-			videoElemPaused : false,
-			maxSpatialLayer : null
-		};
 
 		this._audioTrack = null;
 		this._videoTrack = null;
@@ -31,7 +23,7 @@ export default class PeerView extends React.Component
 				<video
 					ref='videoElem'
 					className={classnames({
-						'is-me'         : isMe
+						'is-me' : isMe
 					})}
 					autoPlay
 					playsInline
@@ -53,25 +45,9 @@ export default class PeerView extends React.Component
 	componentWillUpdate()
 	{
 		const {
-			isMe,
 			audioTrack,
-			videoTrack,
-			videoRtpParameters
+			videoTrack
 		} = this.props;
-
-		const { maxSpatialLayer } = this.state;
-
-		if (isMe && videoRtpParameters && maxSpatialLayer === null)
-		{
-			this.setState(
-				{
-					maxSpatialLayer : videoRtpParameters.encodings.length - 1
-				});
-		}
-		else if (isMe && !videoRtpParameters && maxSpatialLayer !== null)
-		{
-			this.setState({ maxSpatialLayer: null });
-		}
 
 		if (this._audioTrack === audioTrack && this._videoTrack === videoTrack)
 			return;
@@ -81,40 +57,31 @@ export default class PeerView extends React.Component
 
 		const { audioElem, videoElem } = this.refs;
 
-		const audioStream = new MediaStream;
-
-		audioStream.addTrack(audioTrack);
-		audioElem.srcObject = audioStream;
-
-		audioElem.play();
-
-		const videoStream = new MediaStream;
-
-		videoStream.addTrack(videoTrack);
-		videoElem.srcObject = videoStream;
-
-		videoElem.oncanplay = () => this.setState({ videoCanPlay: true });
-
-		videoElem.onplay = () =>
+		if (audioTrack)
 		{
-			this.setState({ videoElemPaused: false });
+			const stream = new MediaStream;
+
+			stream.addTrack(audioTrack);
+			audioElem.srcObject = stream;
 
 			audioElem.play();
-		};
+		}
 
-		videoElem.onpause = () => this.setState({ videoElemPaused: true });
+		if (videoTrack)
+		{
+			const stream = new MediaStream;
 
-		videoElem.play();
+			stream.addTrack(videoTrack);
+			videoElem.srcObject = stream;
+
+			videoElem.play();
+		}
 	}
 }
 
 PeerView.propTypes =
 {
-	isMe : PropTypes.bool,
-	peer : PropTypes.oneOfType(
-		[ appPropTypes.Me, appPropTypes.Peer ]).isRequired,
-	videoVisible       : PropTypes.bool.isRequired,
-	audioTrack         : PropTypes.any,
-	videoTrack         : PropTypes.any,
-	videoRtpParameters : PropTypes.any
+	isMe       : PropTypes.bool,
+	audioTrack : PropTypes.any,
+	videoTrack : PropTypes.any
 };
