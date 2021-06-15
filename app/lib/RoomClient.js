@@ -97,12 +97,6 @@ export default class RoomClient
 		this._dataConsumers = new Map();
 
 		this._webcams = new Map();
-
-		this._webcam =
-		{
-			device     : null,
-			resolution : 'hd'
-		};
 	}
 
 	async join()
@@ -522,403 +516,150 @@ export default class RoomClient
 
 	async enableMic()
 	{
-		logger.debug('enableMic()');
-
 		if (this._micProducer)
 			return;
 
-		if (!this._mediasoupDevice.canProduce('audio'))
-		{
-			logger.error('enableMic() | cannot produce audio');
+		const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-			return;
-		}
+		const track = stream.getAudioTracks()[0];
 
-		let track;
-
-		try
-		{
-			if (!this._externalVideo)
+		this._micProducer = await this._sendTransport.produce(
 			{
-				logger.debug('enableMic() | calling getUserMedia()');
-
-				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-				track = stream.getAudioTracks()[0];
-			}
-			else
-			{
-				const stream = await this._getExternalVideoStream();
-
-				track = stream.getAudioTracks()[0].clone();
-			}
-
-			this._micProducer = await this._sendTransport.produce(
+				track,
+				codecOptions :
 				{
-					track,
-					codecOptions :
-					{
-						opusStereo : 1,
-						opusDtx    : 1
-					}
-				});
-
-			if (this._e2eKey && e2e.isSupported())
-			{
-				e2e.setupSenderTransform(this._micProducer.rtpSender);
-			}
-
-			store.dispatch(stateActions.addProducer(
-				{
-					id            : this._micProducer.id,
-					paused        : this._micProducer.paused,
-					track         : this._micProducer.track,
-					rtpParameters : this._micProducer.rtpParameters,
-					codec         : this._micProducer.rtpParameters.codecs[0].mimeType.split('/')[1]
-				}));
-
-			this._micProducer.on('trackended', () =>
-			{
-				store.dispatch(requestActions.notify(
-					{
-						type : 'error',
-						text : 'Microphone disconnected!'
-					}));
-
-				this.disableMic()
-					.catch(() => {});
+					opusStereo : 1,
+					opusDtx    : 1
+				}
 			});
-		}
-		catch (error)
-		{
-			logger.error('enableMic() | failed:%o', error);
 
-			store.dispatch(requestActions.notify(
-				{
-					type : 'error',
-					text : `Error enabling microphone: ${error}`
-				}));
-
-			if (track)
-				track.stop();
-		}
+		store.dispatch(stateActions.addProducer(
+			{
+				id            : this._micProducer.id,
+				paused        : this._micProducer.paused,
+				track         : this._micProducer.track,
+				rtpParameters : this._micProducer.rtpParameters,
+				codec         : this._micProducer.rtpParameters.codecs[0].mimeType.split('/')[1]
+			}));
 	}
 
 	async enableWebcam()
 	{
-		logger.debug('enableWebcam()');
-
 		if (this._webcamProducer)
 			return;
-		else if (this._shareProducer)
-			await this.disableShare();
 
-		let track;
-		let device;
+		const devices = await navigator.mediaDevices.enumerateDevices();
 
-		store.dispatch(
-			stateActions.setWebcamInProgress(true));
+		let webcam = null;
 
-		try
+		for (const device of devices)
 		{
+			if (device.kind === 'videoinput')
 			{
-				await this._updateWebcams();
-				device = this._webcam.device;
-
-				const { resolution } = this._webcam;
-
-				if (!device)
-					throw new Error('no webcam devices');
-
-				logger.debug('enableWebcam() | calling getUserMedia()');
-
-				const stream = await navigator.mediaDevices.getUserMedia(
-					{
-						video :
-						{
-							deviceId : { ideal: device.deviceId },
-							...VIDEO_CONSTRAINS[resolution]
-						}
-					});
-
-				track = stream.getVideoTracks()[0];
+				webcam = device.deviceId;
+				break;
 			}
+		}
 
-			let encodings;
-			let codec;
-			const codecOptions =
+		const stream = await navigator.mediaDevices.getUserMedia(
 			{
-				videoGoogleStartBitrate : 1000
-			};
-
-			if (this._forceH264)
-			{
-				codec = this._mediasoupDevice.rtpCapabilities.codecs
-					.find((c) => c.mimeType.toLowerCase() === 'video/h264');
-
-				if (!codec)
+				video :
 				{
-					throw new Error('desired H264 codec+configuration is not supported');
+					deviceId : { ideal: webcam }
 				}
-			}
-			else if (this._forceVP9)
-			{
-				codec = this._mediasoupDevice.rtpCapabilities.codecs
-					.find((c) => c.mimeType.toLowerCase() === 'video/vp9');
-
-				if (!codec)
-				{
-					throw new Error('desired VP9 codec+configuration is not supported');
-				}
-			}
-
-			if (this._useSimulcast)
-			{
-				// If VP9 is the only available video codec then use SVC.
-				const firstVideoCodec = this._mediasoupDevice
-					.rtpCapabilities
-					.codecs
-					.find((c) => c.kind === 'video');
-
-				if (
-					(this._forceVP9 && codec) ||
-					firstVideoCodec.mimeType.toLowerCase() === 'video/vp9'
-				)
-				{
-					encodings = WEBCAM_KSVC_ENCODINGS;
-				}
-				else
-				{
-					encodings = WEBCAM_SIMULCAST_ENCODINGS;
-				}
-			}
-
-			this._webcamProducer = await this._sendTransport.produce(
-				{
-					track,
-					encodings,
-					codecOptions,
-					codec
-				});
-
-			if (this._e2eKey && e2e.isSupported())
-			{
-				e2e.setupSenderTransform(this._webcamProducer.rtpSender);
-			}
-
-			store.dispatch(stateActions.addProducer(
-				{
-					id            : this._webcamProducer.id,
-					deviceLabel   : device.label,
-					type          : 'front',
-					paused        : this._webcamProducer.paused,
-					track         : this._webcamProducer.track,
-					rtpParameters : this._webcamProducer.rtpParameters,
-					codec         : this._webcamProducer.rtpParameters.codecs[0].mimeType.split('/')[1]
-				}));
-
-			this._webcamProducer.on('trackended', () =>
-			{
-				store.dispatch(requestActions.notify(
-					{
-						type : 'error',
-						text : 'Webcam disconnected!'
-					}));
-
-				this.disableWebcam()
-					.catch(() => {});
 			});
-		}
-		catch (error)
-		{
-			logger.error('enableWebcam() | failed:%o', error);
 
-			store.dispatch(requestActions.notify(
-				{
-					type : 'error',
-					text : `Error enabling webcam: ${error}`
-				}));
+		const track = stream.getVideoTracks()[0];
 
-			if (track)
-				track.stop();
-		}
+		this._webcamProducer = await this._sendTransport.produce(
+			{
+				track
+			});
 
-		store.dispatch(
-			stateActions.setWebcamInProgress(false));
-	}
-
-	async setMaxSendingSpatialLayer(spatialLayer)
-	{
-		logger.debug('setMaxSendingSpatialLayer() [spatialLayer:%s]', spatialLayer);
-
-		try
-		{
-			if (this._webcamProducer)
-				await this._webcamProducer.setMaxSpatialLayer(spatialLayer);
-			else if (this._shareProducer)
-				await this._shareProducer.setMaxSpatialLayer(spatialLayer);
-		}
-		catch (error)
-		{
-			logger.error('setMaxSendingSpatialLayer() | failed:%o', error);
-
-			store.dispatch(requestActions.notify(
-				{
-					type : 'error',
-					text : `Error setting max sending video spatial layer: ${error}`
-				}));
-		}
-	}
-
-	async requestConsumerKeyFrame(consumerId)
-	{
-		logger.debug('requestConsumerKeyFrame() [consumerId:%s]', consumerId);
-
-		try
-		{
-			await this._protoo.request('requestConsumerKeyFrame', { consumerId });
-
-			store.dispatch(requestActions.notify(
-				{
-					text : 'Keyframe requested for video consumer'
-				}));
-		}
-		catch (error)
-		{
-			logger.error('requestConsumerKeyFrame() | failed:%o', error);
-
-			store.dispatch(requestActions.notify(
-				{
-					type : 'error',
-					text : `Error requesting key frame for Consumer: ${error}`
-				}));
-		}
+		store.dispatch(stateActions.addProducer(
+			{
+				id            : this._webcamProducer.id,
+				deviceLabel   : 'webcam label',
+				type          : 'front',
+				paused        : this._webcamProducer.paused,
+				track         : this._webcamProducer.track,
+				rtpParameters : this._webcamProducer.rtpParameters,
+				codec         : this._webcamProducer.rtpParameters.codecs[0].mimeType.split('/')[1]
+			}));
 	}
 
 	async _joinRoom()
 	{
-		logger.debug('_joinRoom()');
+		this._mediasoupDevice = new mediasoupClient.Device(
+			{
+				handlerName : this._handlerName
+			});
 
-		try
+		const routerRtpCapabilities =
+			await this._protoo.request('getRouterRtpCapabilities');
+
+		await this._mediasoupDevice.load({ routerRtpCapabilities });
+
+		// Create mediasoup Transport for sending (unless we don't want to produce).
+		if (this._produce)
 		{
-			this._mediasoupDevice = new mediasoupClient.Device(
+			const transportInfo = await this._protoo.request(
+				'createWebRtcTransport',
 				{
-					handlerName : this._handlerName
+					forceTcp         : this._forceTcp,
+					producing        : true,
+					consuming        : false,
+					sctpCapabilities : this._useDataChannel
+						? this._mediasoupDevice.sctpCapabilities
+						: undefined
 				});
 
-			const routerRtpCapabilities =
-				await this._protoo.request('getRouterRtpCapabilities');
+			const {
+				id,
+				iceParameters,
+				iceCandidates,
+				dtlsParameters,
+				sctpParameters
+			} = transportInfo;
 
-			await this._mediasoupDevice.load({ routerRtpCapabilities });
-
-			// NOTE: Stuff to play remote audios due to browsers' new autoplay policy.
-			//
-			// Just get access to the mic and DO NOT close the mic track for a while.
-			// Super hack!
-			{
-				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-				const audioTrack = stream.getAudioTracks()[0];
-
-				audioTrack.enabled = false;
-
-				setTimeout(() => audioTrack.stop(), 120000);
-			}
-			// Create mediasoup Transport for sending (unless we don't want to produce).
-			if (this._produce)
-			{
-				const transportInfo = await this._protoo.request(
-					'createWebRtcTransport',
-					{
-						forceTcp         : this._forceTcp,
-						producing        : true,
-						consuming        : false,
-						sctpCapabilities : this._useDataChannel
-							? this._mediasoupDevice.sctpCapabilities
-							: undefined
-					});
-
-				const {
+			this._sendTransport = this._mediasoupDevice.createSendTransport(
+				{
 					id,
 					iceParameters,
 					iceCandidates,
 					dtlsParameters,
-					sctpParameters
-				} = transportInfo;
+					sctpParameters,
+					iceServers             : [],
+					proprietaryConstraints : PC_PROPRIETARY_CONSTRAINTS,
+					additionalSettings 	   :
+						{ encodedInsertableStreams: this._e2eKey && e2e.isSupported() }
+				});
 
-				this._sendTransport = this._mediasoupDevice.createSendTransport(
-					{
-						id,
-						iceParameters,
-						iceCandidates,
-						dtlsParameters,
-						sctpParameters,
-						iceServers             : [],
-						proprietaryConstraints : PC_PROPRIETARY_CONSTRAINTS,
-						additionalSettings 	   :
-							{ encodedInsertableStreams: this._e2eKey && e2e.isSupported() }
-					});
-
-				this._sendTransport.on(
-					'connect', ({ dtlsParameters }, callback, errback) => // eslint-disable-line no-shadow
-					{
-						this._protoo.request(
-							'connectWebRtcTransport',
-							{
-								transportId : this._sendTransport.id,
-								dtlsParameters
-							})
-							.then(callback)
-							.catch(errback);
-					});
-
-				this._sendTransport.on(
-					'produce', async ({ kind, rtpParameters, appData }, callback, errback) =>
-					{
-						try
-						{
-							// eslint-disable-next-line no-shadow
-							const { id } = await this._protoo.request(
-								'produce',
-								{
-									transportId : this._sendTransport.id,
-									kind,
-									rtpParameters,
-									appData
-								});
-
-							callback({ id });
-						}
-						catch (error)
-						{
-							errback(error);
-						}
-					});
-
-				this._sendTransport.on('producedata', async (
-					{
-						sctpStreamParameters,
-						label,
-						protocol,
-						appData
-					},
-					callback,
-					errback
-				) =>
+			this._sendTransport.on(
+				'connect', ({ dtlsParameters }, callback, errback) => // eslint-disable-line no-shadow
 				{
-					logger.debug(
-						'"producedata" event: [sctpStreamParameters:%o, appData:%o]',
-						sctpStreamParameters, appData);
+					this._protoo.request(
+						'connectWebRtcTransport',
+						{
+							transportId : this._sendTransport.id,
+							dtlsParameters
+						})
+						.then(callback)
+						.catch(errback);
+				});
 
+			this._sendTransport.on(
+				'produce', async ({ kind, rtpParameters, appData }, callback, errback) =>
+				{
 					try
 					{
 						// eslint-disable-next-line no-shadow
 						const { id } = await this._protoo.request(
-							'produceData',
+							'produce',
 							{
 								transportId : this._sendTransport.id,
-								sctpStreamParameters,
-								label,
-								protocol,
+								kind,
+								rtpParameters,
 								appData
 							});
 
@@ -929,171 +670,161 @@ export default class RoomClient
 						errback(error);
 					}
 				});
-			}
 
-			// Create mediasoup Transport for receiving (unless we don't want to consume).
-			if (this._consume)
-			{
-				const transportInfo = await this._protoo.request(
-					'createWebRtcTransport',
-					{
-						forceTcp         : this._forceTcp,
-						producing        : false,
-						consuming        : true,
-						sctpCapabilities : this._useDataChannel
-							? this._mediasoupDevice.sctpCapabilities
-							: undefined
-					});
-
-				const {
-					id,
-					iceParameters,
-					iceCandidates,
-					dtlsParameters,
-					sctpParameters
-				} = transportInfo;
-
-				this._recvTransport = this._mediasoupDevice.createRecvTransport(
-					{
-						id,
-						iceParameters,
-						iceCandidates,
-						dtlsParameters,
-						sctpParameters,
-						iceServers 	       : [],
-						additionalSettings :
-							{ encodedInsertableStreams: this._e2eKey && e2e.isSupported() }
-					});
-
-				this._recvTransport.on(
-					'connect', ({ dtlsParameters }, callback, errback) => // eslint-disable-line no-shadow
-					{
-						this._protoo.request(
-							'connectWebRtcTransport',
-							{
-								transportId : this._recvTransport.id,
-								dtlsParameters
-							})
-							.then(callback)
-							.catch(errback);
-					});
-			}
-
-			// Join now into the room.
-			// NOTE: Don't send our RTP capabilities if we don't want to consume.
-			const { peers } = await this._protoo.request(
-				'join',
+			this._sendTransport.on('producedata', async (
 				{
-					displayName     : this._displayName,
-					device          : this._device,
-					rtpCapabilities : this._consume
-						? this._mediasoupDevice.rtpCapabilities
-						: undefined,
-					sctpCapabilities : this._useDataChannel && this._consume
+					sctpStreamParameters,
+					label,
+					protocol,
+					appData
+				},
+				callback,
+				errback
+			) =>
+			{
+				logger.debug(
+					'"producedata" event: [sctpStreamParameters:%o, appData:%o]',
+					sctpStreamParameters, appData);
+
+				try
+				{
+					// eslint-disable-next-line no-shadow
+					const { id } = await this._protoo.request(
+						'produceData',
+						{
+							transportId : this._sendTransport.id,
+							sctpStreamParameters,
+							label,
+							protocol,
+							appData
+						});
+
+					callback({ id });
+				}
+				catch (error)
+				{
+					errback(error);
+				}
+			});
+		}
+
+		// Create mediasoup Transport for receiving (unless we don't want to consume).
+		if (this._consume)
+		{
+			const transportInfo = await this._protoo.request(
+				'createWebRtcTransport',
+				{
+					forceTcp         : this._forceTcp,
+					producing        : false,
+					consuming        : true,
+					sctpCapabilities : this._useDataChannel
 						? this._mediasoupDevice.sctpCapabilities
 						: undefined
 				});
 
-			store.dispatch(
-				stateActions.setRoomState('connected'));
+			const {
+				id,
+				iceParameters,
+				iceCandidates,
+				dtlsParameters,
+				sctpParameters
+			} = transportInfo;
 
-			// Clean all the existing notifcations.
-			store.dispatch(
-				stateActions.removeAllNotifications());
-
-			store.dispatch(requestActions.notify(
+			this._recvTransport = this._mediasoupDevice.createRecvTransport(
 				{
-					text    : 'You are in the room!',
-					timeout : 3000
-				}));
-
-			for (const peer of peers)
-			{
-				store.dispatch(
-					stateActions.addPeer(
-						{ ...peer, consumers: [], dataConsumers: [] }));
-			}
-
-			// Enable mic/webcam.
-			if (this._produce)
-			{
-				// Set our media capabilities.
-				store.dispatch(stateActions.setMediaCapabilities(
-					{
-						canSendMic    : this._mediasoupDevice.canProduce('audio'),
-						canSendWebcam : this._mediasoupDevice.canProduce('video')
-					}));
-
-				this.enableMic();
-
-				const devicesCookie = cookiesManager.getDevices();
-
-				if (!devicesCookie || devicesCookie.webcamEnabled || this._externalVideo)
-					this.enableWebcam();
-
-				this._sendTransport.on('connectionstatechange', (connectionState) =>
-				{
-					if (connectionState === 'connected')
-					{
-						this.enableChatDataProducer();
-						this.enableBotDataProducer();
-					}
+					id,
+					iceParameters,
+					iceCandidates,
+					dtlsParameters,
+					sctpParameters,
+					iceServers 	       : [],
+					additionalSettings :
+						{ encodedInsertableStreams: this._e2eKey && e2e.isSupported() }
 				});
-			}
 
-			// NOTE: For testing.
-			if (window.SHOW_INFO)
-			{
-				const { me } = store.getState();
-
-				store.dispatch(
-					stateActions.setRoomStatsPeerId(me.id));
-			}
-		}
-		catch (error)
-		{
-			logger.error('_joinRoom() failed:%o', error);
-
-			store.dispatch(requestActions.notify(
+			this._recvTransport.on(
+				'connect', ({ dtlsParameters }, callback, errback) => // eslint-disable-line no-shadow
 				{
-					type : 'error',
-					text : `Could not join the room: ${error}`
-				}));
-		}
-	}
-
-	async _updateWebcams()
-	{
-		logger.debug('_updateWebcams()');
-
-		// Reset the list.
-		this._webcams = new Map();
-
-		logger.debug('_updateWebcams() | calling enumerateDevices()');
-
-		const devices = await navigator.mediaDevices.enumerateDevices();
-
-		for (const device of devices)
-		{
-			if (device.kind !== 'videoinput')
-				continue;
-
-			this._webcams.set(device.deviceId, device);
+					this._protoo.request(
+						'connectWebRtcTransport',
+						{
+							transportId : this._recvTransport.id,
+							dtlsParameters
+						})
+						.then(callback)
+						.catch(errback);
+				});
 		}
 
-		const array = Array.from(this._webcams.values());
-		const len = array.length;
-		const currentWebcamId =
-			this._webcam.device ? this._webcam.device.deviceId : undefined;
-
-		logger.debug('_updateWebcams() [webcams:%o]', array);
-
-		if (len === 0)
-			this._webcam.device = null;
-		else if (!this._webcams.has(currentWebcamId))
-			this._webcam.device = array[0];
+		// Join now into the room.
+		// NOTE: Don't send our RTP capabilities if we don't want to consume.
+		const { peers } = await this._protoo.request(
+			'join',
+			{
+				displayName     : this._displayName,
+				device          : this._device,
+				rtpCapabilities : this._consume
+					? this._mediasoupDevice.rtpCapabilities
+					: undefined,
+				sctpCapabilities : this._useDataChannel && this._consume
+					? this._mediasoupDevice.sctpCapabilities
+					: undefined
+			});
 
 		store.dispatch(
-			stateActions.setCanChangeWebcam(this._webcams.size > 1));
+			stateActions.setRoomState('connected'));
+
+		// Clean all the existing notifcations.
+		store.dispatch(
+			stateActions.removeAllNotifications());
+
+		store.dispatch(requestActions.notify(
+			{
+				text    : 'You are in the room!',
+				timeout : 3000
+			}));
+
+		for (const peer of peers)
+		{
+			store.dispatch(
+				stateActions.addPeer(
+					{ ...peer, consumers: [], dataConsumers: [] }));
+		}
+
+		// Enable mic/webcam.
+		if (this._produce)
+		{
+			// Set our media capabilities.
+			store.dispatch(stateActions.setMediaCapabilities(
+				{
+					canSendMic    : this._mediasoupDevice.canProduce('audio'),
+					canSendWebcam : this._mediasoupDevice.canProduce('video')
+				}));
+
+			this.enableMic();
+
+			const devicesCookie = cookiesManager.getDevices();
+
+			if (!devicesCookie || devicesCookie.webcamEnabled || this._externalVideo)
+				this.enableWebcam();
+
+			this._sendTransport.on('connectionstatechange', (connectionState) =>
+			{
+				if (connectionState === 'connected')
+				{
+					this.enableChatDataProducer();
+					this.enableBotDataProducer();
+				}
+			});
+		}
+
+		// NOTE: For testing.
+		if (window.SHOW_INFO)
+		{
+			const { me } = store.getState();
+
+			store.dispatch(
+				stateActions.setRoomStatsPeerId(me.id));
+		}
 	}
 }
