@@ -38,57 +38,6 @@ class Me extends React.Component
 				data-component='Me'
 				ref={(node) => (this._rootNode = node)}
 			>
-				<div className='controls'>
-					<div
-						className={classnames('button', 'mic', micState)}
-						onClick={() =>
-						{
-							micState === 'on'
-								? roomClient.muteMic()
-								: roomClient.unmuteMic();
-						}}
-					/>
-
-					<div
-						className={classnames('button', 'webcam', webcamState, {
-							disabled : me.webcamInProgress || me.shareInProgress
-						})}
-						onClick={() =>
-						{
-							if (webcamState === 'on')
-							{
-								cookiesManager.setDevices({ webcamEnabled: false });
-								roomClient.disableWebcam();
-							}
-							else
-							{
-								cookiesManager.setDevices({ webcamEnabled: true });
-								roomClient.enableWebcam();
-							}
-						}}
-					/>
-
-					<div
-						className={classnames('button', 'change-webcam', changeWebcamState, {
-							disabled : me.webcamInProgress || me.shareInProgress
-						})}
-						onClick={() => roomClient.changeWebcam()}
-					/>
-
-					<div
-						className={classnames('button', 'share', shareState, {
-							disabled : me.shareInProgress || me.webcamInProgress
-						})}
-						onClick={() =>
-						{
-							if (shareState === 'on')
-								roomClient.disableShare();
-							else
-								roomClient.enableShare();
-						}}
-					/>
-				</div>
-
 				<PeerView
 					isMe
 					peer={me}

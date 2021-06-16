@@ -73,16 +73,10 @@ domready(async () =>
 			displayName,
 			device,
 			handlerName : handler,
-			useSimulcast,
-			useSharingSimulcast,
 			forceTcp,
 			produce,
 			consume,
-			forceH264,
-			forceVP9,
-			svc,
 			datachannel,
-			externalVideo,
 			e2eKey
 		});
 
