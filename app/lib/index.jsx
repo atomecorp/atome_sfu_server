@@ -37,27 +37,13 @@ domready(async () =>
 	const peerId = randomString({ length: 8 }).toLowerCase();
 	const roomId = urlParser.query.roomId;
 	const displayName = randomName();
-	const handler = urlParser.query.handler;
-	const useSimulcast = urlParser.query.simulcast !== 'false';
-	const useSharingSimulcast = urlParser.query.sharingSimulcast !== 'false';
-	const forceTcp = urlParser.query.forceTcp === 'true';
-	const produce = urlParser.query.produce !== 'false';
-	const consume = urlParser.query.consume !== 'false';
-	const forceH264 = urlParser.query.forceH264 === 'true';
-	const forceVP9 = urlParser.query.forceVP9 === 'true';
-	const svc = urlParser.query.svc;
-	const datachannel = urlParser.query.datachannel !== 'false';
-	const externalVideo = urlParser.query.externalVideo === 'true';
-	const e2eKey = urlParser.query.e2eKey;
 
-	// Get the effective/shareable Room URL.
 	const roomUrlParser = new UrlParse(window.location.href, true);
 
 	const roomUrl = roomUrlParser.toString();
 
 	const displayNameSet = false;
 
-	// Get current device info.
 	const device = deviceInfo();
 
 	store.dispatch(
@@ -71,13 +57,7 @@ domready(async () =>
 			roomId,
 			peerId,
 			displayName,
-			device,
-			handlerName : handler,
-			forceTcp,
-			produce,
-			consume,
-			datachannel,
-			e2eKey
+			device
 		});
 
 	window.CLIENT = roomClient;

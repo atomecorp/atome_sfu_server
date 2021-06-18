@@ -4,8 +4,6 @@ import PropTypes from 'prop-types';
 import * as appPropTypes from './appPropTypes';
 import { withRoomContext } from '../RoomContext';
 import * as requestActions from '../redux/requestActions';
-import { Appear } from './transitions';
-import Me from './Me';
 import Peers from './Peers';
 
 class Room extends React.Component
@@ -13,16 +11,9 @@ class Room extends React.Component
 	render()
 	{
 		return (
-			<Appear>
-				<div data-component='Room'>
-					<div>
-						<Peers />
-					</div>
-					<div>
-						<Me />
-					</div>
-				</div>
-			</Appear>
+			<div data-component='Room'>
+				<Peers />
+			</div>
 		);
 	}
 
