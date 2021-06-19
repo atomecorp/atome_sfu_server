@@ -50,9 +50,6 @@ const del = require('del');
 const mkdirp = require('mkdirp');
 const ncp = require('ncp');
 const eslint = require('gulp-eslint');
-const stylus = require('gulp-stylus');
-const cssBase64 = require('gulp-css-base64');
-const nib = require('nib');
 const browserSync = require('browser-sync');
 
 const PKG = require('./package.json');
@@ -149,26 +146,6 @@ gulp.task('lint', () =>
 		.pipe(eslint.format());
 });
 
-gulp.task('css', () =>
-{
-	return gulp.src('stylus/index.styl')
-		.pipe(plumber())
-		.pipe(stylus(
-			{
-				use      : nib(),
-				compress : process.env.NODE_ENV === 'production'
-			}))
-		.on('error', logError)
-		.pipe(cssBase64(
-			{
-				baseDir           : '.',
-				maxWeightResource : 50000 // So big ttf fonts are not included, nice.
-			}))
-		.pipe(rename(`${PKG.name}.css`))
-		.pipe(gulp.dest(OUTPUT_DIR))
-		.pipe(touch());
-});
-
 gulp.task('html', () =>
 {
 	return gulp.src('index.html')
@@ -204,7 +181,6 @@ gulp.task('dist', gulp.series(
 	'lint',
 	'bundle',
 	'html',
-	'css',
 	'resources'
 ));
 
@@ -213,16 +189,6 @@ gulp.task('watch', (done) =>
 	// Watch changes in HTML.
 	gulp.watch([ 'index.html' ], gulp.series(
 		'html'
-	));
-
-	// Watch changes in Stylus files.
-	gulp.watch([ 'stylus/**/*.styl' ], gulp.series(
-		'css'
-	));
-
-	// Watch changes in resources.
-	gulp.watch([ 'resources/**/*' ], gulp.series(
-		'resources', 'css'
 	));
 
 	// Watch changes in JS files.
@@ -238,7 +204,6 @@ gulp.task('browser:base', gulp.series(
 	'lint',
 	'bundle:watch',
 	'html',
-	'css',
 	'resources',
 	'watch'
 ));
