@@ -1,6 +1,5 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import classnames from 'classnames';
 
 export default class PeerView extends React.Component
 {
@@ -14,17 +13,10 @@ export default class PeerView extends React.Component
 
 	render()
 	{
-		const {
-			isMe
-		} = this.props;
-
 		return (
 			<div data-component='PeerView'>
 				<video
 					ref='videoElem'
-					className={classnames({
-						'is-me' : isMe
-					})}
 					autoPlay
 					playsInline
 					muted
@@ -35,7 +27,6 @@ export default class PeerView extends React.Component
 					ref='audioElem'
 					autoPlay
 					playsInline
-					muted={isMe}
 					controls={false}
 				/>
 			</div>
@@ -81,7 +72,6 @@ export default class PeerView extends React.Component
 
 PeerView.propTypes =
 {
-	isMe       : PropTypes.bool,
 	audioTrack : PropTypes.any,
 	videoTrack : PropTypes.any
 };
