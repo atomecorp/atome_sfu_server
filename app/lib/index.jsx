@@ -20,12 +20,10 @@ RoomClient.init({ store });
 
 domready(async () =>
 {
-	const peerId = randomString({ length: 8 }).toLowerCase();
-
 	roomClient = new RoomClient(
 		{
 			roomId : 0,
-			peerId
+			peerId : randomString()
 		});
 
 	render(
