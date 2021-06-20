@@ -6,9 +6,7 @@ import {
 	createStore as createReduxStore
 } from 'redux';
 
-import randomString from 'random-string';
 import RoomClient from './RoomClient';
-import RoomContext from './RoomContext';
 import reducers from './redux/reducers';
 import Peers from './components/Peers';
 
@@ -21,21 +19,17 @@ RoomClient.init({ store });
 
 domready(async () =>
 {
-	const peerId = randomString({ length: 8 }).toLowerCase();
-
 	roomClient = new RoomClient(
 		{
 			roomId : 0,
-			peerId
+			peerId : '0'
 		});
 
 	render(
 		<Provider store={store}>
-			<RoomContext.Provider value={roomClient}>
-				<div data-component='Room'>
-					<Peers />
-				</div>
-			</RoomContext.Provider>
+			<div data-component='Room'>
+				<Peers />
+			</div>
 		</Provider>,
 		document.getElementById('mediasoup-demo-app-container')
 	);

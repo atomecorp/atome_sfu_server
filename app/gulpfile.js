@@ -49,16 +49,9 @@ const buffer = require('vinyl-buffer');
 const del = require('del');
 const mkdirp = require('mkdirp');
 const ncp = require('ncp');
-const eslint = require('gulp-eslint');
 const browserSync = require('browser-sync');
 
 const PKG = require('./package.json');
-const BANNER = fs.readFileSync('banner.txt').toString();
-const BANNER_OPTIONS =
-{
-	pkg         : PKG,
-	currentYear : (new Date()).getFullYear()
-};
 const OUTPUT_DIR = '../server/public';
 
 // Set Node 'development' environment (unless externally set).
@@ -122,7 +115,6 @@ function bundle(options)
 			.pipe(gulpif(process.env.NODE_ENV === 'production',
 				uglify()
 			))
-			.pipe(header(BANNER, BANNER_OPTIONS))
 			.pipe(gulp.dest(OUTPUT_DIR));
 	}
 
@@ -142,8 +134,6 @@ gulp.task('lint', () =>
 
 	return gulp.src(src)
 		.pipe(plumber())
-		.pipe(eslint())
-		.pipe(eslint.format());
 });
 
 gulp.task('html', () =>

@@ -186,7 +186,7 @@ export default class RoomClient
 		this._sendTransport = this._mediasoupDevice.createSendTransport(producerTransportInfo);
 
 		this._sendTransport.on(
-			'connect', ({ dtlsParameters }, callback) => // eslint-disable-line no-shadow
+			'connect', ({ dtlsParameters }, callback) =>
 			{
 				this._protoo.request(
 					'connectWebRtcTransport',

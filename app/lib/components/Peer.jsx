@@ -2,7 +2,6 @@ import React from 'react';
 import { connect } from 'react-redux';
 import PropTypes from 'prop-types';
 import * as appPropTypes from './appPropTypes';
-import { withRoomContext } from '../RoomContext';
 import PeerView from './PeerView';
 
 const Peer = (props) =>
@@ -53,8 +52,8 @@ const mapStateToProps = (state, { id }) =>
 	};
 };
 
-const PeerContainer = withRoomContext(connect(
+const PeerContainer = connect(
 	mapStateToProps
-)(Peer));
+)(Peer);
 
 export default PeerContainer;
