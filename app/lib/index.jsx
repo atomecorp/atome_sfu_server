@@ -9,6 +9,7 @@ import {
 import RoomClient from './RoomClient';
 import reducers from './redux/reducers';
 import Peers from './components/Peers';
+import randomString from "random-string";
 
 let roomClient;
 const store = createReduxStore(
@@ -19,10 +20,12 @@ RoomClient.init({ store });
 
 domready(async () =>
 {
+	const peerId = randomString({ length: 8 }).toLowerCase();
+
 	roomClient = new RoomClient(
 		{
 			roomId : 0,
-			peerId : '0'
+			peerId
 		});
 
 	render(
