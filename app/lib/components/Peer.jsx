@@ -1,59 +1,51 @@
 import React from 'react';
-import { connect } from 'react-redux';
-import PropTypes from 'prop-types';
-import * as appPropTypes from './appPropTypes';
+import {connect} from 'react-redux';
 import PeerView from './PeerView';
+import PropTypes from "prop-types";
 
-const Peer = (props) =>
-{
-	const {
-		peer,
-		audioConsumer,
-		videoConsumer
-	} = props;
+const Peer = (props) => {
+    const {
+        audioConsumer,
+        videoConsumer
+    } = props;
 
-	return (
-		<div data-component='Peer'>
-			<PeerView
-				peer={peer}
-				audioConsumerId={audioConsumer ? audioConsumer.id : null}
-				videoConsumerId={videoConsumer ? videoConsumer.id : null}
-				audioRtpParameters={audioConsumer ? audioConsumer.rtpParameters : null}
-				videoRtpParameters={videoConsumer ? videoConsumer.rtpParameters : null}
-				audioTrack={audioConsumer ? audioConsumer.track : null}
-				videoTrack={videoConsumer ? videoConsumer.track : null}
-			/>
-		</div>
-	);
+    return (
+        <div data-component='Peer'>
+            <PeerView
+                audioTrack={audioConsumer ? audioConsumer.track : null}
+                videoTrack={videoConsumer ? videoConsumer.track : null}
+            />
+        </div>
+    );
 };
 
 Peer.propTypes =
-{
-	roomClient    : PropTypes.any.isRequired,
-	peer          : appPropTypes.Peer.isRequired,
-	audioConsumer : appPropTypes.Consumer,
-	videoConsumer : appPropTypes.Consumer
-};
-
-const mapStateToProps = (state, { id }) =>
-{
-	const peer = state.peers[id];
-	const consumersArray = peer.consumers
-		.map((consumerId) => state.consumers[consumerId]);
-	const audioConsumer =
-		consumersArray.find((consumer) => consumer.track.kind === 'audio');
-	const videoConsumer =
-		consumersArray.find((consumer) => consumer.track.kind === 'video');
-
-	return {
-		peer,
-		audioConsumer,
-		videoConsumer
-	};
-};
+    {
+        audioConsumer: {
+            track: PropTypes.any
+        },
+        videoConsumer: {
+            track: PropTypes.any
+        }
+    };
 
 const PeerContainer = connect(
-	mapStateToProps
+    (state, {id}) => {
+        const peer = state.peers[id];
+
+        const consumersArray = peer.consumers
+            .map((consumerId) => state.consumers[consumerId]);
+
+        const audioConsumer =
+            consumersArray.find((consumer) => consumer.track.kind === 'audio');
+        const videoConsumer =
+            consumersArray.find((consumer) => consumer.track.kind === 'video');
+
+        return {
+            audioConsumer,
+            videoConsumer
+        };
+    }
 )(Peer);
 
 export default PeerContainer;

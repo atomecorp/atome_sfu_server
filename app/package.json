@@ -7,7 +7,7 @@
   "license": "All Rights Reserved",
   "main": "lib/index.jsx",
   "scripts": {
-    "start": "gulp live"
+    "start": "gulp"
   },
   "dependencies": {
     "@babel/runtime": "^7.8.4",

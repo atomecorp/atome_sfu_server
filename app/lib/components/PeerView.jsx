@@ -6,9 +6,6 @@ export default class PeerView extends React.Component
 	constructor(props)
 	{
 		super(props);
-
-		this._audioTrack = null;
-		this._videoTrack = null;
 	}
 
 	render()
@@ -39,12 +36,6 @@ export default class PeerView extends React.Component
 			audioTrack,
 			videoTrack
 		} = this.props;
-
-		if (this._audioTrack === audioTrack && this._videoTrack === videoTrack)
-			return;
-
-		this._audioTrack = audioTrack;
-		this._videoTrack = videoTrack;
 
 		const { audioElem, videoElem } = this.refs;
 
