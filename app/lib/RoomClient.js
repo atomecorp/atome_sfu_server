@@ -20,8 +20,6 @@ export default class RoomClient {
         this._mediasoupDevice = null;
         this._sendTransport = null;
         this._recvTransport = null;
-        this._micProducer = null;
-        this._webcamProducer = null;
     }
 
     async join() {
@@ -72,18 +70,8 @@ export default class RoomClient {
 
         this._protoo.on('notification', (notification) => {
             switch (notification.method) {
-                case 'producerScore': {
-                    const {producerId, score} = notification.data;
-
-                    store.dispatch({
-                        type: 'SET_PRODUCER_SCORE',
-                        payload: {producerId, score}
-                    });
-
-                    break;
-                }
-
                 case 'consumerScore': {
+                    console.log(notification.data);
                     const {consumerId, score} = notification.data;
 
                     store.dispatch({
@@ -97,64 +85,22 @@ export default class RoomClient {
         });
     }
 
-    async enableMic() {
-        const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    async enableStreams() {
+        const audiosStream = await navigator.mediaDevices.getUserMedia({audio: true});
+        const videoStream = await navigator.mediaDevices.getUserMedia({video: true});
 
-        const track = stream.getAudioTracks()[0];
+        const audioTrack = audiosStream.getAudioTracks()[0];
+        const videoTrack = videoStream.getVideoTracks()[0];
 
-        this._micProducer = await this._sendTransport.produce(
+        await this._sendTransport.produce(
             {
-                track
+                track: audioTrack
             });
 
-        store.dispatch({
-            type: 'ADD_PRODUCER',
-            payload: {
-                producer: {
-                    id: this._micProducer.id,
-                    paused: this._micProducer.paused,
-                    track: this._micProducer.track
-                }
-            }
-        });
-    }
-
-    async enableWebcam() {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-
-        let webcam = null;
-
-        for (const device of devices) {
-            if (device.kind === 'videoinput') {
-                webcam = device.deviceId;
-                break;
-            }
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia(
+        await this._sendTransport.produce(
             {
-                video:
-                    {
-                        deviceId: {ideal: webcam}
-                    }
+                track: videoTrack
             });
-
-        const track = stream.getVideoTracks()[0];
-
-        this._webcamProducer = await this._sendTransport.produce(
-            {
-                track
-            });
-
-        store.dispatch({
-            type: 'ADD_PRODUCER',
-            payload: {
-                producer: {
-                    id: this._webcamProducer.id,
-                    track: this._webcamProducer.track
-                }
-            }
-        });
     }
 
     async _joinRoom() {
@@ -258,7 +204,6 @@ export default class RoomClient {
                 });
         }
 
-        await this.enableMic();
-        await this.enableWebcam();
+        await this.enableStreams();
     }
 }

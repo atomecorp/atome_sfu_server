@@ -18,7 +18,7 @@ const Peers = ({ peers }) =>
 	);
 };
 
-const PeersContainer = connect(
+export default connect(
 	(state) =>
 	{
 		return {
@@ -26,5 +26,3 @@ const PeersContainer = connect(
 		};
 	}
 )(Peers);
-
-export default PeersContainer;

@@ -1,14 +1,8 @@
 import React from 'react';
 import {connect} from 'react-redux';
 import PeerView from './PeerView';
-import PropTypes from "prop-types";
 
-const Peer = (props) => {
-    const {
-        audioConsumer,
-        videoConsumer
-    } = props;
-
+const Peer = ({audioConsumer, videoConsumer}) => {
     return (
         <div data-component='Peer'>
             <PeerView
@@ -19,17 +13,7 @@ const Peer = (props) => {
     );
 };
 
-Peer.propTypes =
-    {
-        audioConsumer: {
-            track: PropTypes.any
-        },
-        videoConsumer: {
-            track: PropTypes.any
-        }
-    };
-
-const PeerContainer = connect(
+export default connect(
     (state, {id}) => {
         const peer = state.peers[id];
 
@@ -47,5 +31,4 @@ const PeerContainer = connect(
         };
     }
 )(Peer);
-
-export default PeerContainer;
+;
