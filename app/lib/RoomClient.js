@@ -67,22 +67,6 @@ export default class RoomClient {
                 }
             }
         });
-
-        this._protoo.on('notification', (notification) => {
-            switch (notification.method) {
-                case 'consumerScore': {
-                    console.log(notification.data);
-                    const {consumerId, score} = notification.data;
-
-                    store.dispatch({
-                        type: 'SET_CONSUMER_SCORE',
-                        payload: {consumerId, score}
-                    });
-
-                    break;
-                }
-            }
-        });
     }
 
     async enableStreams() {

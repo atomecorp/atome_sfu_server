@@ -11,19 +11,6 @@ const consumers = (state = initialState, action) =>
 			return { ...state, [consumer.id]: consumer };
 		}
 
-		case 'SET_CONSUMER_SCORE':
-		{
-			const { consumerId, score } = action.payload;
-			const consumer = state[consumerId];
-
-			if (!consumer)
-				return state;
-
-			const newConsumer = { ...consumer, score };
-
-			return { ...state, [consumerId]: newConsumer };
-		}
-
 		default:
 		{
 			return state;
