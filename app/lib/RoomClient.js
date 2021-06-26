@@ -1,6 +1,5 @@
-import protooClient from 'protoo-client';
 import * as mediasoupClient from 'mediasoup-client';
-import {getProtooUrl} from './urlFactory';
+import {generateRandomNumber} from "mediasoup-client/lib/utils";
 
 let store;
 
@@ -11,26 +10,29 @@ export default class RoomClient {
 
     constructor(
         {
-            roomId,
             peerId
         }
     ) {
-        this._protooUrl = getProtooUrl({roomId, peerId});
-        this._protoo = null;
+        this.url = "wss://172.18.51.152:4443/?roomId=0&peerId=" + peerId;
+        this.socket = null;
+        this.callbacks = [];
         this._mediasoupDevice = null;
         this._sendTransport = null;
         this._recvTransport = null;
     }
 
     async join() {
-        const protooTransport = new protooClient.WebSocketTransport(this._protooUrl);
+        this.socket = new WebSocket(this.url, "protoo");
 
-        this._protoo = new protooClient.Peer(protooTransport);
+        const self = this;
+        this.socket.onopen = () => {
+            self._joinRoom()
+        };
 
-        this._protoo.on('open', () => this._joinRoom());
+        this.socket.onmessage = function (event) {
+            const eventData = JSON.parse(event.data)
 
-        this._protoo.on('request', async (request, accept) => {
-            switch (request.method) {
+            switch (eventData.method) {
                 case 'newConsumer': {
                     const {
                         peerId,
@@ -39,34 +41,41 @@ export default class RoomClient {
                         kind,
                         rtpParameters,
                         appData
-                    } = request.data;
+                    } = eventData.data;
 
-                    const consumer = await this._recvTransport.consume(
+                    self._recvTransport.consume(
                         {
                             id,
                             producerId,
                             kind,
                             rtpParameters,
                             appData: {...appData, peerId}
+                        }).then((consumer) => {
+
+                        store.dispatch({
+                            type: 'ADD_CONSUMER',
+                            payload: {
+                                consumer: {
+                                    id: consumer.id,
+                                    track: consumer.track
+                                },
+                                peerId
+                            }
                         });
 
-                    store.dispatch({
-                        type: 'ADD_CONSUMER',
-                        payload: {
-                            consumer: {
-                                id: consumer.id,
-                                track: consumer.track
-                            },
-                            peerId
-                        }
-                    });
+                        // accept();
 
-                    accept();
+                    });
 
                     break;
                 }
             }
-        });
+
+            const callback = self.callbacks[eventData.id];
+            if (callback !== undefined) {
+                callback(eventData);
+            }
+        };
     }
 
     async enableStreams() {
@@ -87,107 +96,160 @@ export default class RoomClient {
             });
     }
 
-    async _joinRoom() {
+    _joinRoom() {
         this._mediasoupDevice = new mediasoupClient.Device();
 
-        const routerRtpCapabilities = await this._protoo.request('getRouterRtpCapabilities');
+        const message = {
+            request: true,
+            id: generateRandomNumber(),
+            method: "getRouterRtpCapabilities",
+            data: {}
+        };
 
-        await this._mediasoupDevice.load({routerRtpCapabilities});
+        this.sendRequest(message, (response) => {
+            const routerRtpCapabilities = response.data;
+            this._mediasoupDevice.load({routerRtpCapabilities});
 
-        const producerTransportInfo = await this._protoo.request(
-            'createWebRtcTransport',
-            {
-                producing: true
-            });
+            const message = {
+                request: true,
+                id: generateRandomNumber(),
+                method: "createWebRtcTransport",
+                data: {
+                    "producing": true
+                }
+            };
+            this.sendRequest(message, (response) => {
+                const producerTransportInfo = response.data;
+                this._sendTransport = this._mediasoupDevice.createSendTransport(producerTransportInfo);
 
-        this._sendTransport = this._mediasoupDevice.createSendTransport(producerTransportInfo);
-
-        this._sendTransport.on(
-            'connect', ({dtlsParameters}, callback) => {
-                this._protoo.request(
-                    'connectWebRtcTransport',
-                    {
-                        transportId: this._sendTransport.id,
-                        dtlsParameters
-                    })
-                    .then(callback);
-            });
-
-        this._sendTransport.on(
-            'produce', async ({kind, rtpParameters, appData}, callback) => {
-                const {id} = await this._protoo.request(
-                    'produce',
-                    {
-                        transportId: this._sendTransport.id,
-                        kind,
-                        rtpParameters,
-                        appData
+                this._sendTransport.on(
+                    'connect', ({dtlsParameters}, callback) => {
+                        const message = {
+                            request: true,
+                            id: generateRandomNumber(),
+                            method: "connectWebRtcTransport",
+                            data: {
+                                "transportId": this._sendTransport.id,
+                                dtlsParameters
+                            }
+                        };
+                        this.sendRequest(message, () => {
+                            callback();
+                        });
                     });
 
-                callback({id});
-            });
+                this._sendTransport.on(
+                    'produce', async ({kind, rtpParameters, appData}, callback) => {
+                        const message = {
+                            request: true,
+                            id: generateRandomNumber(),
+                            method: "produce",
+                            data: {
+                                "transportId": this._sendTransport.id,
+                                kind,
+                                rtpParameters,
+                                appData
+                            }
+                        };
+                        this.sendRequest(message, (response) => {
+                            const {id} = response.data;
 
-        this._sendTransport.on('producedata', async (
-            {
-                sctpStreamParameters,
-                label,
-                protocol,
-                appData
-            },
-            callback
-        ) => {
-            const {id} = await this._protoo.request(
-                'produceData',
-                {
-                    transportId: this._sendTransport.id,
-                    sctpStreamParameters,
-                    label,
-                    protocol,
-                    appData
-                });
+                            callback(id);
+                        });
+                    });
 
-            callback({id});
-        });
-
-        const consumerTransportInfo = await this._protoo.request(
-            'createWebRtcTransport',
-            {
-                consuming: true
-            });
-
-        this._recvTransport = this._mediasoupDevice.createRecvTransport(consumerTransportInfo);
-
-        this._recvTransport.on(
-            'connect', ({dtlsParameters}, callback) => {
-                this._protoo.request(
-                    'connectWebRtcTransport',
+                this._sendTransport.on('producedata', async (
                     {
-                        transportId: this._recvTransport.id,
-                        dtlsParameters
-                    })
-                    .then(callback);
-            });
-
-        const {peers} = await this._protoo.request(
-            'join',
-            {
-                rtpCapabilities: this._mediasoupDevice.rtpCapabilities
-            });
-
-        for (const peer of peers) {
-            store.dispatch(
-                {
-                    type: 'ADD_PEER',
-                    payload: {
-                        peer: {
-                            ...peer,
-                            consumers: [],
-                            dataConsumers: []
+                        sctpStreamParameters,
+                        label,
+                        protocol,
+                        appData
+                    },
+                    callback
+                ) => {
+                    const message = {
+                        "request": true,
+                        "id": generateRandomNumber(),
+                        "method": "produceData",
+                        "data": {
+                            "transportId": this._sendTransport.id,
+                            sctpStreamParameters,
+                            label,
+                            protocol,
+                            appData
                         }
-                    }
-                });
-        }
+                    };
+                    this.sendRequest(message, (response) => {
+                        const {id} = response.data;
 
-        await this.enableStreams();
+                        callback({id});
+                    });
+                });
+
+                const message = {
+                    "request": true,
+                    "id": generateRandomNumber(),
+                    "method": "createWebRtcTransport",
+                    "data": {
+                        "consuming": true
+                    }
+                };
+                this.sendRequest(message, (response) => {
+                    const consumerTransportInfo = response.data;
+                    this._recvTransport = this._mediasoupDevice.createRecvTransport(consumerTransportInfo);
+
+                    this._recvTransport.on(
+                        'connect', ({dtlsParameters}, callback) => {
+                            const message = {
+                                "request": true,
+                                "id": generateRandomNumber(),
+                                "method": "connectWebRtcTransport",
+                                "data": {
+                                    "transportId": this._recvTransport.id,
+                                    dtlsParameters
+                                }
+                            }
+                            this.sendRequest(message, () => {
+                                callback();
+                            });
+                        });
+
+                    const message = {
+                        "request": true,
+                        "id": generateRandomNumber(),
+                        "method": "join",
+                        "data": {
+                            "rtpCapabilities": this._mediasoupDevice.rtpCapabilities
+                        }
+                    };
+                    this.sendRequest(message, (response) => {
+                        const {peers} = response.data;
+
+                        for (const peer of peers) {
+                            store.dispatch(
+                                {
+                                    type: 'ADD_PEER',
+                                    payload: {
+                                        peer: {
+                                            ...peer,
+                                            consumers: [],
+                                            dataConsumers: []
+                                        }
+                                    }
+                                });
+                        }
+
+                        this.enableStreams();
+                    });
+                });
+            });
+        });
+    }
+
+    sendRequest(message, callback) {
+        this.callbacks[message.id] = callback;
+
+        const json = JSON.stringify(message);
+        this.socket.send(json);
     }
 }

@@ -19,7 +19,6 @@ RoomClient.init({store});
 domready(async () => {
     roomClient = new RoomClient(
         {
-            roomId: 0,
             peerId: randomString()
         });
 
@@ -32,5 +31,5 @@ domready(async () => {
         document.getElementById('mediasoup-demo-app-container')
     );
 
-    roomClient.join();
+    await roomClient.join();
 });
