@@ -30,7 +30,7 @@ export default class RoomClient {
         };
 
         this.socket.onmessage = function (event) {
-            const eventData = JSON.parse(event.data)
+            const eventData = JSON.parse(event.data);
 
             switch (eventData.method) {
                 case 'newConsumer': {
@@ -42,6 +42,8 @@ export default class RoomClient {
                         rtpParameters,
                         appData
                     } = eventData.data;
+
+                    const eventId = eventData.id;
 
                     self._recvTransport.consume(
                         {
@@ -63,8 +65,13 @@ export default class RoomClient {
                             }
                         });
 
-                        // accept();
-
+                        self.socket.send(JSON.stringify(
+                            {
+                                "id": eventId,
+                                "ok": true,
+                                "response": true,
+                                "data": {}
+                            }));
                     });
 
                     break;
