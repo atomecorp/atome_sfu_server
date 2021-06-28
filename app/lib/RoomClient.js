@@ -1,13 +1,7 @@
 import * as mediasoupClient from 'mediasoup-client';
 import {generateRandomNumber} from "mediasoup-client/lib/utils";
 
-let store;
-
 export default class RoomClient {
-    static init(data) {
-        store = data.store;
-    }
-
     constructor(
         {
             peerId
@@ -21,7 +15,7 @@ export default class RoomClient {
         this._recvTransport = null;
     }
 
-    async join() {
+    join(audioTrackCallback, videoTrackCallback) {
         this.socket = new WebSocket(this.url, "protoo");
 
         const self = this;
@@ -54,17 +48,6 @@ export default class RoomClient {
                             appData: {...appData, peerId}
                         }).then((consumer) => {
 
-                        store.dispatch({
-                            type: 'ADD_CONSUMER',
-                            payload: {
-                                consumer: {
-                                    id: consumer.id,
-                                    track: consumer.track
-                                },
-                                peerId
-                            }
-                        });
-
                         self.socket.send(JSON.stringify(
                             {
                                 "id": eventId,
@@ -72,6 +55,12 @@ export default class RoomClient {
                                 "response": true,
                                 "data": {}
                             }));
+
+                        if (consumer.track.kind === 'audio') {
+                            audioTrackCallback(consumer.track);
+                        } else if (consumer.track.kind === 'video') {
+                            videoTrackCallback(consumer.track);
+                        }
                     });
 
                     break;
@@ -85,24 +74,6 @@ export default class RoomClient {
         };
     }
 
-    async enableStreams() {
-        const audiosStream = await navigator.mediaDevices.getUserMedia({audio: true});
-        const videoStream = await navigator.mediaDevices.getUserMedia({video: true});
-
-        const audioTrack = audiosStream.getAudioTracks()[0];
-        const videoTrack = videoStream.getVideoTracks()[0];
-
-        await this._sendTransport.produce(
-            {
-                track: audioTrack
-            });
-
-        await this._sendTransport.produce(
-            {
-                track: videoTrack
-            });
-    }
-
     _joinRoom() {
         this._mediasoupDevice = new mediasoupClient.Device();
 
@@ -113,7 +84,7 @@ export default class RoomClient {
             data: {}
         };
 
-        this.sendRequest(message, (response) => {
+        this._sendRequest(message, (response) => {
             const routerRtpCapabilities = response.data;
             this._mediasoupDevice.load({routerRtpCapabilities});
 
@@ -125,7 +96,7 @@ export default class RoomClient {
                     "producing": true
                 }
             };
-            this.sendRequest(message, (response) => {
+            this._sendRequest(message, (response) => {
                 const producerTransportInfo = response.data;
                 this._sendTransport = this._mediasoupDevice.createSendTransport(producerTransportInfo);
 
@@ -140,7 +111,7 @@ export default class RoomClient {
                                 dtlsParameters
                             }
                         };
-                        this.sendRequest(message, () => {
+                        this._sendRequest(message, () => {
                             callback();
                         });
                     });
@@ -158,7 +129,7 @@ export default class RoomClient {
                                 appData
                             }
                         };
-                        this.sendRequest(message, (response) => {
+                        this._sendRequest(message, (response) => {
                             const {id} = response.data;
 
                             callback(id);
@@ -186,7 +157,7 @@ export default class RoomClient {
                             appData
                         }
                     };
-                    this.sendRequest(message, (response) => {
+                    this._sendRequest(message, (response) => {
                         const {id} = response.data;
 
                         callback({id});
@@ -201,7 +172,7 @@ export default class RoomClient {
                         "consuming": true
                     }
                 };
-                this.sendRequest(message, (response) => {
+                this._sendRequest(message, (response) => {
                     const consumerTransportInfo = response.data;
                     this._recvTransport = this._mediasoupDevice.createRecvTransport(consumerTransportInfo);
 
@@ -216,7 +187,7 @@ export default class RoomClient {
                                     dtlsParameters
                                 }
                             }
-                            this.sendRequest(message, () => {
+                            this._sendRequest(message, () => {
                                 callback();
                             });
                         });
@@ -229,34 +200,47 @@ export default class RoomClient {
                             "rtpCapabilities": this._mediasoupDevice.rtpCapabilities
                         }
                     };
-                    this.sendRequest(message, (response) => {
-                        const {peers} = response.data;
-
-                        for (const peer of peers) {
-                            store.dispatch(
-                                {
-                                    type: 'ADD_PEER',
-                                    payload: {
-                                        peer: {
-                                            ...peer,
-                                            consumers: [],
-                                            dataConsumers: []
-                                        }
-                                    }
-                                });
-                        }
-
-                        this.enableStreams();
+                    this._sendRequest(message, () => {
+                        this._enableAudioStream();
+                        this._enableVideoStream();
                     });
                 });
             });
         });
     }
 
-    sendRequest(message, callback) {
+    _sendRequest(message, callback) {
         this.callbacks[message.id] = callback;
 
         const json = JSON.stringify(message);
         this.socket.send(json);
+    }
+
+    _enableAudioStream() {
+        navigator.mediaDevices.getUserMedia({audio: true}).then((audioStream => {
+            const audioTrack = audioStream.getAudioTracks()[0];
+
+            this._sendTransport.produce(
+                {
+                    track: audioTrack
+                }
+            ).catch(reason => {
+                console.log('Cannot produce audio track. Reason: ' + reason);
+            });
+        }));
+    }
+
+    _enableVideoStream() {
+        navigator.mediaDevices.getUserMedia({video: true}).then((videoStream) => {
+            const videoTrack = videoStream.getVideoTracks()[0];
+
+            this._sendTransport.produce(
+                {
+                    track: videoTrack
+                }
+            ).catch(reason => {
+                console.log('Cannot produce video track. Reason: ' + reason);
+            });
+        });
     }
 }

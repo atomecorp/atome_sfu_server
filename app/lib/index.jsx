@@ -1,35 +1,46 @@
 import domready from 'domready';
-import React from 'react';
-import {render} from 'react-dom';
-import {Provider} from 'react-redux';
-import {createStore as createReduxStore} from 'redux';
-
 import RoomClient from './RoomClient';
-import reducers from './redux/reducers';
-import App from './components/App';
 import randomString from "random-string";
 
-let roomClient;
-const store = createReduxStore(
-    reducers
-);
-
-RoomClient.init({store});
-
 domready(async () => {
-    roomClient = new RoomClient(
+    const roomClient = new RoomClient(
         {
             peerId: randomString()
         });
 
-    render(
-        <Provider store={store}>
-            <div data-component='Room'>
-                <App/>
-            </div>
-        </Provider>,
-        document.getElementById('mediasoup-demo-app-container')
-    );
+    roomClient.join((audioTrack) => {
+            const stream = new MediaStream;
 
-    await roomClient.join();
+            stream.addTrack(audioTrack);
+
+            const audioElement = document.createElement('audio');
+            audioElement.autoplay = true;
+            audioElement.playsInline = true;
+            audioElement.controls = false;
+            document.body.appendChild(audioElement);
+
+            audioElement.srcObject = stream;
+
+            audioElement.play().catch(reason => {
+                console.log(('Cannot play audio element. Reason: ' + reason));
+            });
+        },
+        (videoTrack) => {
+            const stream = new MediaStream;
+
+            stream.addTrack(videoTrack);
+
+            const videoElement = document.createElement('video');
+            videoElement.autoplay = true;
+            videoElement.playsInline = true;
+            videoElement.muted = true;
+            videoElement.controls = false;
+            document.body.appendChild(videoElement);
+
+            videoElement.srcObject = stream;
+
+            videoElement.play().catch(reason => {
+                console.log(('Cannot play video element. Reason: ' + reason));
+            });
+        });
 });
