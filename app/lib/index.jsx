@@ -5,7 +5,7 @@ import randomString from "random-string";
 domready(async () => {
     const roomClient = new RoomClient(
         {
-            server: "atome.one",
+            server: "mediasoup.atome.one",
             port: 443,
             roomId: 0,
             peerId: randomString()
