@@ -5,11 +5,14 @@ import randomString from "random-string";
 domready(async () => {
     const roomClient = new RoomClient(
         {
+            server: "5.196.69.103",
+            port: 443,
+            roomId: 0,
             peerId: randomString()
         });
 
     roomClient.join((audioTrack) => {
-            const stream = new MediaStream;
+            const stream = new MediaStream();
 
             stream.addTrack(audioTrack);
 
@@ -26,7 +29,7 @@ domready(async () => {
             });
         },
         (videoTrack) => {
-            const stream = new MediaStream;
+            const stream = new MediaStream();
 
             stream.addTrack(videoTrack);
 
@@ -42,5 +45,14 @@ domready(async () => {
             videoElement.play().catch(reason => {
                 console.log(('Cannot play video element. Reason: ' + reason));
             });
+        },
+        (error) => {
+            console.log("Microphone error: " + error);
+        },
+        (error) => {
+            console.log("Camera error: " + error);
+        },
+        (error) => {
+            console.log("Server error: " + error);
         });
 });

@@ -4,10 +4,13 @@ import {generateRandomNumber} from "mediasoup-client/lib/utils";
 export default class RoomClient {
     constructor(
         {
+            server,
+            port,
+            roomId,
             peerId
         }
     ) {
-        this.url = "wss://172.18.51.152:4443/?roomId=0&peerId=" + peerId;
+        this.url = "wss://" + server + ":" + port + "/?roomId=" + roomId + "&peerId=" + peerId;
         this.socket = null;
         this.callbacks = [];
         this._mediasoupDevice = null;
@@ -15,12 +18,12 @@ export default class RoomClient {
         this._recvTransport = null;
     }
 
-    join(audioTrackCallback, videoTrackCallback) {
+    join(audioTrackCallback, videoTrackCallback, microphoneCallback, cameraCallback, serverErrorCallback) {
         this.socket = new WebSocket(this.url, "protoo");
 
         const self = this;
         this.socket.onopen = () => {
-            self._joinRoom()
+            self._joinRoom(microphoneCallback, cameraCallback)
         };
 
         this.socket.onmessage = function (event) {
@@ -72,9 +75,13 @@ export default class RoomClient {
                 callback(eventData);
             }
         };
+
+        this.socket.onError = function (error) {
+            serverErrorCallback(error);
+        };
     }
 
-    _joinRoom() {
+    _joinRoom(microphoneCallback, cameraCallback) {
         this._mediasoupDevice = new mediasoupClient.Device();
 
         const message = {
@@ -201,8 +208,8 @@ export default class RoomClient {
                         }
                     };
                     this._sendRequest(message, () => {
-                        this._enableAudioStream();
-                        this._enableVideoStream();
+                        this._enableAudioStream(microphoneCallback);
+                        this._enableVideoStream(cameraCallback);
                     });
                 });
             });
@@ -216,7 +223,7 @@ export default class RoomClient {
         this.socket.send(json);
     }
 
-    _enableAudioStream() {
+    _enableAudioStream(microphoneCallback) {
         navigator.mediaDevices.getUserMedia({audio: true}).then((audioStream => {
             const audioTrack = audioStream.getAudioTracks()[0];
 
@@ -227,10 +234,12 @@ export default class RoomClient {
             ).catch(reason => {
                 console.log('Cannot produce audio track. Reason: ' + reason);
             });
+        }).catch(function(error) {
+            microphoneCallback(error)
         }));
     }
 
-    _enableVideoStream() {
+    _enableVideoStream(cameraCallback) {
         navigator.mediaDevices.getUserMedia({video: true}).then((videoStream) => {
             const videoTrack = videoStream.getVideoTracks()[0];
 
@@ -241,6 +250,8 @@ export default class RoomClient {
             ).catch(reason => {
                 console.log('Cannot produce video track. Reason: ' + reason);
             });
+        }).catch(function(error) {
+            cameraCallback(error)
         });
     }
 }
