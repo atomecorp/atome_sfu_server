@@ -224,7 +224,7 @@ export default class RoomClient {
     }
 
     _enableAudioStream(microphoneCallback) {
-        navigator.mediaDevices.getUserMedia({audio: true}).then((audioStream => {
+        navigator.mediaDevices.getUserMedia({audio: true}).then(audioStream => {
             const audioTrack = audioStream.getAudioTracks()[0];
 
             this._sendTransport.produce(
@@ -236,7 +236,7 @@ export default class RoomClient {
             });
         }).catch(function(error) {
             microphoneCallback(error)
-        }));
+        });
     }
 
     _enableVideoStream(cameraCallback) {
